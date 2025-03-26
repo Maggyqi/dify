@@ -4,14 +4,11 @@ on:
   # 监听本地推送
   push:
     branches: [ main ]
-  # 每天凌晨 2 点自动同步
-  schedule:
-    - cron: '0 2 * * *'
-  # 可以手动触发
-  workflow_dispatch:
   # 监听上游仓库的更新
   repository_dispatch:
     types: [upstream_update]
+  # 保留手动触发以应对特殊情况
+  workflow_dispatch:
 
 jobs:
   sync-fork:

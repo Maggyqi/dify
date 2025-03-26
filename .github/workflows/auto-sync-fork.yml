@@ -17,7 +17,7 @@ jobs:
   sync-fork:
     runs-on: ubuntu-latest
     outputs:
-      has_changes: ${{ steps.check_changes.outputs.has_changes }}
+      has_changes: ${{ steps.set_output.outputs.has_changes }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v3
@@ -46,17 +46,21 @@ jobs:
           
           # 检查是否有更新
           if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
             git push origin main
           else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
           fi
-        id: check_changes
 
-      - name: 设置推送标志
-        if: github.event_name == 'push'
-        run: echo "has_changes=true" >> $GITHUB_OUTPUT
-        id: push_changes
+      # 统一设置输出变量
+      - name: 设置输出变量
+        id: set_output
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=${{ env.CHANGES_DETECTED }}" >> $GITHUB_OUTPUT
+          fi
 
   sync-gitee:
     needs: sync-fork

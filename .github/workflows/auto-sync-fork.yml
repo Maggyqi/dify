@@ -1,6 +1,9 @@
 name: Auto Sync Fork and Gitee
 
 on:
+  # 监听本地推送
+  push:
+    branches: [ main ]
   # 每天凌晨 2 点自动同步
   schedule:
     - cron: '0 2 * * *'
@@ -23,6 +26,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 同步上游仓库
+        if: github.event_name != 'push'  # 只在非 push 事件时同步上游
         run: |
           # 添加上游仓库
           git remote add upstream https://github.com/langgenius/dify.git
@@ -48,6 +52,11 @@ jobs:
             echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
         id: check_changes
+
+      - name: 设置推送标志
+        if: github.event_name == 'push'
+        run: echo "has_changes=true" >> $GITHUB_OUTPUT
+        id: push_changes
 
   sync-gitee:
     needs: sync-fork

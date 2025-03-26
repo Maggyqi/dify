@@ -1,0 +1,88 @@
+name: Auto Sync Fork and SRD Cloud
+
+on:
+  # 监听本地推送
+  push:
+    branches: [ main ]
+  # 监听上游仓库的更新
+  repository_dispatch:
+    types: [upstream_update]
+  # 可以手动触发
+  workflow_dispatch:
+
+jobs:
+  sync-fork:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.set_output.outputs.has_changes }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 同步上游仓库
+        if: github.event_name != 'push'  # 只在非 push 事件时同步上游
+        run: |
+          # 添加上游仓库
+          git remote add upstream https://github.com/langgenius/dify.git
+          # 获取上游仓库的更新
+          git fetch upstream
+          # 切换到主分支
+          git checkout main
+          
+          # 获取当前 commit hash
+          OLD_COMMIT=$(git rev-parse HEAD)
+          
+          # 合并上游更新
+          git merge upstream/main
+          
+          # 获取合并后的 commit hash
+          NEW_COMMIT=$(git rev-parse HEAD)
+          
+          # 检查是否有更新
+          if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+            echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+            git push origin main
+          else
+            echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
+          fi
+
+      # 统一设置输出变量
+      - name: 设置输出变量
+        id: set_output
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=${{ env.CHANGES_DETECTED }}" >> $GITHUB_OUTPUT
+          fi
+
+  sync-srd:
+    needs: sync-fork
+    if: needs.sync-fork.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: 推送到 SRD Cloud
+        env:
+          SRD_USERNAME: ${{ secrets.SRD_USERNAME }}
+          SRD_PASSWORD: ${{ secrets.SRD_PASSWORD }}
+          SRD_REPO: ${{ secrets.SRD_REPO }}
+        run: |
+          # 添加 SRD Cloud 远程仓库
+          # 使用 HTTPS 方式
+          echo "正在添加 SRD Cloud 远程仓库..."
+          git remote add srd "https://$SRD_USERNAME:$SRD_PASSWORD@$SRD_USERNAME@code.srdcloud.cn/$SRD_REPO"
+          
+          # 推送代码
+          echo "正在推送到 SRD Cloud..."
+          git push srd main:sync/dify/main --force
+          
+          # 清理
+          git remote remove srd
